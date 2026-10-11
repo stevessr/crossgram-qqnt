@@ -109,4 +109,7 @@ The Linux receive-packet hook polls its native queue from the Electron main
 process. The default interval is 250 ms to avoid frequent empty N-API queue
 drains while keeping pushed message delivery responsive. Set
 `QQNT_BRIDGE_RECEIVE_POLL_INTERVAL_MS` to an integer from 50 to 1000 to tune
-the CPU/latency tradeoff; invalid values use the 250 ms default.
+the CPU/latency tradeoff; invalid values use the 250 ms default. The native
+hook also filters for the one QQ push command consumed by the bridge before
+copying its payload, instead of copying every incoming QQ SSO response into
+the receive queue.

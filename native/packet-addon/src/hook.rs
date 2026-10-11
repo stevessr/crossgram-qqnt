@@ -400,6 +400,7 @@ mod linux {
     const MAX_RECEIVE_PAYLOAD: usize = 1024 * 1024;
     const MAX_RECEIVE_QUEUE_BYTES: usize = 8 * 1024 * 1024;
     const MAX_RECEIVE_STRING: usize = 4096;
+    const BRIDGED_RECEIVE_COMMAND: &[u8] = b"trpc.msg.olpush.OlPushService.MsgPush";
 
     pub fn drain_receive_packets() -> Vec<super::ReceivePacket> {
         let mut queue = RECEIVE_QUEUE
@@ -525,6 +526,9 @@ mod linux {
             let mut inner_record = [0u8; 0x48];
             if read_process_memory(inner, &mut inner_record) {
                 if let Some(command) = read_qq_string_bytes(&inner_record, 0x20) {
+                    if !is_bridged_receive_command(&command) {
+                        return None;
+                    }
                     let buffer = usize::from_ne_bytes(inner_record[0x38..0x40].try_into().ok()?)
                         as *const u8;
                     if let Some(payload) = read_receive_payload(buffer) {
@@ -539,8 +543,11 @@ mod linux {
             }
         }
 
-        let uin = read_qq_string_bytes(&record, 0)?;
         let command = read_qq_string_bytes(&record, 32)?;
+        if !is_bridged_receive_command(&command) {
+            return None;
+        }
+        let uin = read_qq_string_bytes(&record, 0)?;
         let sequence = u32::from_ne_bytes(record[24..28].try_into().ok()?) as u64;
         let buffer = usize::from_ne_bytes(record[56..64].try_into().ok()?) as *const u8;
         let payload = read_receive_payload(buffer)?;
@@ -550,6 +557,10 @@ mod linux {
             sequence,
             payload,
         })
+    }
+
+    fn is_bridged_receive_command(command: &[u8]) -> bool {
+        command == BRIDGED_RECEIVE_COMMAND
     }
 
     fn read_receive_payload(buffer: *const u8) -> Option<Vec<u8>> {
@@ -1153,6 +1164,15 @@ mod linux {
             assert_eq!(packet.command, "trpc.msg.olpush.OlPushService.MsgPush");
             assert_eq!(packet.sequence, 42);
             assert_eq!(packet.payload, payload);
+        }
+
+        #[test]
+        fn only_copies_payloads_for_commands_forwarded_to_the_bridge() {
+            assert!(is_bridged_receive_command(
+                b"trpc.msg.olpush.OlPushService.MsgPush"
+            ));
+            assert!(!is_bridged_receive_command(b"OidbSvcTrpcTcp.0x9067_202"));
+            assert!(!is_bridged_receive_command(b"trpc.qq_new_tech.status_svc.StatusService"));
         }
 
         #[test]
