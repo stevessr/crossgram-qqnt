@@ -18,6 +18,7 @@ import { ElectronCallController } from './call-controller.js'
 const processType = (process as NodeJS.Process & { type?: string }).type
 const bootstrapKey = Symbol.for('qqnt-bridge.bootstrap')
 const bootstrapState = globalThis as typeof globalThis & { [bootstrapKey]?: boolean }
+const DEFAULT_RECEIVE_POLL_INTERVAL_MS = 250
 
 // NODE_OPTIONS is inherited by Electron child processes. Only initialize in
 // Electron's browser (main) process; plain Node remains useful for diagnostics.
@@ -193,12 +194,27 @@ function installKernelRequireHook(bridge: QQKernelBridge, login: QQLoginControll
           log('error', 'QQNT Linux receive packet drain failed', error)
         }
       }
-      const timer = setInterval(poll, 50)
+      const timer = setInterval(poll, receivePollIntervalMs())
       timer.unref?.()
     } catch (error) {
       log('error', 'QQNT Linux receive packet hook install failed', error)
     }
   }
+}
+
+/**
+ * Draining the native receive queue crosses the N-API boundary even when it is
+ * empty. Avoid waking the JS thread 20 times per second while keeping pushed
+ * message delivery responsive (at most 250 ms by default).
+ */
+export function receivePollIntervalMs(
+  configured = process.env.QQNT_BRIDGE_RECEIVE_POLL_INTERVAL_MS,
+): number {
+  if (configured === undefined || configured === '') return DEFAULT_RECEIVE_POLL_INTERVAL_MS
+  const parsed = Number(configured)
+  return Number.isInteger(parsed) && parsed >= 50 && parsed <= 1_000
+    ? parsed
+    : DEFAULT_RECEIVE_POLL_INTERVAL_MS
 }
 
 function logLinuxPacketProbe(probe: PacketBindingProbe): void {

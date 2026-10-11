@@ -103,3 +103,10 @@ All endpoints use the same bearer token as the bridge API:
 - `POST /v1/login/qrcode/refresh`
 
 Keep the API on localhost and use an SSH tunnel when remote access is needed.
+# QQNT Bridge environment
+
+The Linux receive-packet hook polls its native queue from the Electron main
+process. The default interval is 250 ms to avoid frequent empty N-API queue
+drains while keeping pushed message delivery responsive. Set
+`QQNT_BRIDGE_RECEIVE_POLL_INTERVAL_MS` to an integer from 50 to 1000 to tune
+the CPU/latency tradeoff; invalid values use the 250 ms default.

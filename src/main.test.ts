@@ -5,13 +5,14 @@ import { QQLoginController } from './login-controller.js'
 import { QQKernelBridge } from './qq-kernel.js'
 
 let wrapSession: typeof import('./main.js').wrapSession
+let receivePollIntervalMs: typeof import('./main.js').receivePollIntervalMs
 
 beforeAll(async () => {
   const processWithType = process as NodeJS.Process & { type?: string }
   const processType = processWithType.type
   processWithType.type = 'renderer'
   try {
-    ({ wrapSession } = await import('./main.js'))
+    ({ wrapSession, receivePollIntervalMs } = await import('./main.js'))
   } finally {
     processWithType.type = processType
   }
@@ -72,5 +73,18 @@ describe('wrapSession AVSDK listener facade', () => {
     expect(setActionFromAVSDK).toHaveBeenCalledOnce()
     expect(setActionFromAVSDK.mock.contexts[0]).toBe(native)
     expect(consoleLog.mock.calls.map(([message]) => String(message)).join('\n')).not.toContain('avsdk-action')
+  })
+})
+
+describe('native receive queue polling', () => {
+  it('uses a low-overhead 250 ms default while allowing a bounded override', () => {
+    expect(receivePollIntervalMs(undefined)).toBe(250)
+    expect(receivePollIntervalMs('500')).toBe(500)
+    expect(receivePollIntervalMs('50')).toBe(50)
+    expect(receivePollIntervalMs('1000')).toBe(1000)
+  })
+
+  it.each(['0', '49', '1001', '1.5', 'invalid'])('falls back for unsafe poll interval %s', (value) => {
+    expect(receivePollIntervalMs(value)).toBe(250)
   })
 })
